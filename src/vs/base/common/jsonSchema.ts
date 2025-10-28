@@ -102,54 +102,69 @@ export interface IJSONSchemaSnippet {
 
 /**
  * Converts a basic JSON schema to a TypeScript type.
- *
- * Doesn't support all JSON schema features, such as `additionalProperties`.
  */
 export type TypeFromJsonSchema<T> =
-	// String
-	T extends { type: 'string' }
-	? string
-
-	// Number
-	: T extends { type: 'number' | 'integer' }
-	? number
-
-	// Boolean
-	: T extends { type: 'boolean' }
-	? boolean
-
-	// Null
-	: T extends { type: 'null' }
-	? null
+	// enum
+	T extends { enum: infer EnumValues }
+	? UnionOf<EnumValues>
 
 	// Object with list of required properties.
 	// Values are required or optional based on `required` list.
 	: T extends { type: 'object'; properties: infer P; required: infer RequiredList }
 	? {
 		[K in keyof P]: IsRequired<K, RequiredList> extends true ? TypeFromJsonSchema<P[K]> : TypeFromJsonSchema<P[K]> | undefined;
-	}
+	} & AdditionalPropertiesType<T>
 
 	// Object with no required properties.
 	// All values are optional
 	: T extends { type: 'object'; properties: infer P }
-	? { [K in keyof P]: TypeFromJsonSchema<P[K]> | undefined }
+	? { [K in keyof P]: TypeFromJsonSchema<P[K]> | undefined } & AdditionalPropertiesType<T>
 
 	// Array
-	: T extends { type: 'array'; items: infer I }
-	? Array<TypeFromJsonSchema<I>>
+	: T extends { type: 'array'; items: infer Items }
+	? Items extends [...infer R]
+	// If items is an array, we treat it like a tuple
+	? { [K in keyof R]: TypeFromJsonSchema<Items[K]> }
+	: Array<TypeFromJsonSchema<Items>>
 
-	// OneOf
+	// oneOf / anyof
+	// These are handled the same way as they both represent a union type.
+	// However at the validation level, they have different semantics.
 	: T extends { oneOf: infer I }
 	? MapSchemaToType<I>
+	: T extends { anyOf: infer I }
+	? MapSchemaToType<I>
+
+	// Primitive types
+	: T extends { type: infer Type }
+	// Basic type
+	? Type extends 'string' | 'number' | 'integer' | 'boolean' | 'null'
+	? SchemaPrimitiveTypeNameToType<Type>
+	// Union of primitive types
+	: Type extends [...infer R]
+	? UnionOf<{ [K in keyof R]: SchemaPrimitiveTypeNameToType<R[K]> }>
+	: never
 
 	// Fallthrough
+	: never;
+
+type SchemaPrimitiveTypeNameToType<T> =
+	T extends 'string' ? string :
+	T extends 'number' | 'integer' ? number :
+	T extends 'boolean' ? boolean :
+	T extends 'null' ? null :
+	never;
+
+type UnionOf<T> =
+	T extends [infer First, ...infer Rest]
+	? First | UnionOf<Rest>
 	: never;
 
 type IsRequired<K, RequiredList> =
 	RequiredList extends []
 	? false
 
-	: RequiredList extends [K, ...infer R]
+	: RequiredList extends [K, ...infer _]
 	? true
 
 	: RequiredList extends [infer _, ...infer R]
@@ -157,46 +172,14 @@ type IsRequired<K, RequiredList> =
 
 	: false;
 
+type AdditionalPropertiesType<Schema> =
+	Schema extends { additionalProperties: infer AP }
+	? AP extends false ? {} : { [key: string]: TypeFromJsonSchema<Schema['additionalProperties']> }
+	: {};
+
 type MapSchemaToType<T> = T extends [infer First, ...infer Rest]
 	? TypeFromJsonSchema<First> | MapSchemaToType<Rest>
 	: never;
-
-/**
- * Converts a type into a JSON schema shape with basic typing.
- *
- * This enforces that the schema has the expected properties and types.
- *
- * Doesn't support all JSON schema features. Notably, doesn't support converting unions or intersections to `oneOf` or `anyOf`.
- */
-export type JsonSchemaFromType<T> =
-	// String
-	T extends string
-	? IJSONSchema & { type: 'string' }
-
-	// Number
-	: T extends number
-	? IJSONSchema & { type: 'number' | 'integer' }
-
-	// Boolean
-	: T extends boolean
-	? IJSONSchema & { type: 'boolean' }
-
-	// Any
-	// https://stackoverflow.com/questions/61624719/how-to-conditionally-detect-the-any-type-in-typescript
-	: 0 extends (1 & T)
-	? IJSONSchema
-
-	// Array
-	: T extends ReadonlyArray<infer U>
-	? IJSONSchema & { items: JsonSchemaFromType<U> }
-
-	// Record
-	: T extends Record<string, infer V>
-	? IJSONSchema & { additionalProperties: JsonSchemaFromType<V> }
-
-	// Object
-	: IJSONSchema & { properties: { [K in keyof T]: JsonSchemaFromType<T[K]> } };
-
 
 interface Equals { schemas: IJSONSchema[]; id?: string }
 
