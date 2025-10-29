@@ -515,12 +515,6 @@
         "enablement": "!operationInProgress"
       },
       {
-        "command": "git.graph.compareBranch",
-        "title": "%command.graphCompareBranch%",
-        "category": "Git",
-        "enablement": "!operationInProgress"
-      },
-      {
         "command": "git.deleteRemoteBranch",
         "title": "%command.deleteRemoteBranch%",
         "category": "Git",
@@ -589,12 +583,6 @@
       {
         "command": "git.graph.deleteTag",
         "title": "%command.graphDeleteTag%",
-        "category": "Git",
-        "enablement": "!operationInProgress"
-      },
-      {
-        "command": "git.graph.compareTag",
-        "title": "%command.graphCompareTag%",
         "category": "Git",
         "enablement": "!operationInProgress"
       },
@@ -1010,6 +998,30 @@
         "command": "git.blame.toggleStatusBarItem",
         "title": "%command.blameToggleStatusBarItem%",
         "category": "Git"
+      },
+      {
+        "command": "git.graph.compareRef",
+        "title": "%command.graphCompareRef%",
+        "category": "Git",
+        "enablement": "!operationInProgress"
+      },
+      {
+        "command": "git.graph.openIncomingChanges",
+        "title": "%command.graphOpenIncomingChanges%",
+        "category": "Git",
+        "enablement": "!operationInProgress && git.currentHistoryItemIsBehind"
+      },
+      {
+        "command": "git.graph.openOutgoingChanges",
+        "title": "%command.graphOpenOutgoingChanges%",
+        "category": "Git",
+        "enablement": "!operationInProgress && git.currentHistoryItemIsAhead"
+      },
+      {
+        "command": "git.graph.compareWithMergeBase",
+        "title": "%command.graphCompareWithMergeBase%",
+        "category": "Git",
+        "enablement": "!operationInProgress && git.currentHistoryItemHasMergeBase"
       }
     ],
     "continueEditSession": [
@@ -1607,7 +1619,7 @@
           "when": "false"
         },
         {
-          "command": "git.graph.compareBranch",
+          "command": "git.graph.compareRef",
           "when": "false"
         },
         {
@@ -1615,11 +1627,19 @@
           "when": "false"
         },
         {
-          "command": "git.graph.compareTag",
+          "command": "git.graph.cherryPick",
           "when": "false"
         },
         {
-          "command": "git.graph.cherryPick",
+          "command": "git.graph.openIncomingChanges",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.openOutgoingChanges",
+          "when": "false"
+        },
+        {
+          "command": "git.graph.compareWithMergeBase",
           "when": "false"
         },
         {
@@ -2240,6 +2260,21 @@
           "command": "git.publish",
           "when": "scmProvider == git && !scmCurrentHistoryItemRefHasRemote",
           "group": "navigation@903"
+        },
+        {
+          "command": "git.graph.openIncomingChanges",
+          "when": "scmProvider == git",
+          "group": "1_changes@1"
+        },
+        {
+          "command": "git.graph.openOutgoingChanges",
+          "when": "scmProvider == git",
+          "group": "1_changes@2"
+        },
+        {
+          "command": "git.graph.compareWithMergeBase",
+          "when": "scmProvider == git",
+          "group": "2_compare@1"
         }
       ],
       "scm/historyItem/context": [
@@ -2264,6 +2299,11 @@
           "group": "4_modify@1"
         },
         {
+          "command": "git.graph.compareRef",
+          "when": "scmProvider == git",
+          "group": "5_compare@1"
+        },
+        {
           "command": "git.copyCommitId",
           "when": "scmProvider == git && !listMultiSelection",
           "group": "9_copy@1"
@@ -2286,19 +2326,9 @@
           "group": "2_branch@2"
         },
         {
-          "command": "git.graph.compareBranch",
-          "when": "scmProvider == git && scmHistoryItemRef =~ /^refs\\/heads\\//",
-          "group": "2_branch@3"
-        },
-        {
           "command": "git.graph.deleteTag",
           "when": "scmProvider == git && scmHistoryItemRef =~ /^refs\\/tags\\//",
           "group": "3_tag@2"
-        },
-        {
-          "command": "git.graph.compareTag",
-          "when": "scmProvider == git && scmHistoryItemRef =~ /^refs\\/tags\\//",
-          "group": "3_tag@3"
         }
       ],
       "editor/title": [
