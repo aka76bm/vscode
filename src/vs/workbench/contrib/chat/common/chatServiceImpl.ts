@@ -13,6 +13,7 @@ import { Iterable } from '../../../../base/common/iterator.js';
 import { Disposable, DisposableMap, DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { ResourceMap } from '../../../../base/common/map.js';
 import { revive } from '../../../../base/common/marshalling.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { autorun, derived, IObservable, ObservableMap } from '../../../../base/common/observable.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { isDefined } from '../../../../base/common/types.js';
@@ -37,6 +38,7 @@ import { IChatSessionsService } from './chatSessionsService.js';
 import { ChatSessionStore, IChatTransfer2 } from './chatSessionStore.js';
 import { IChatSlashCommandService } from './chatSlashCommands.js';
 import { IChatTransferService } from './chatTransferService.js';
+import { LocalChatSessionUri } from './chatUri.js';
 import { IChatRequestVariableEntry } from './chatVariableEntries.js';
 import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from './constants.js';
 import { ChatMessageRole, IChatMessage } from './languageModels.js';
@@ -188,7 +190,8 @@ export class ChatService extends Disposable implements IChatService {
 		}
 	}
 
-	async setChatSessionTitle(sessionId: string, title: string): Promise<void> {
+	async setChatSessionTitle(sessionResource: URI, title: string): Promise<void> {
+		const sessionId = this.toLocalSessionId(sessionResource);
 		const model = this._sessionModels.get(sessionId);
 		if (model) {
 			model.setCustomTitle(title);
@@ -299,14 +302,15 @@ export class ChatService extends Disposable implements IChatService {
 	async getLocalSessionHistory(): Promise<IChatDetail[]> {
 		const liveSessionItems = Array.from(this._sessionModels.values())
 			.filter(session => !session.isImported && !session.inputType)
-			.map(session => {
+			.map((session): IChatDetail => {
 				const title = session.title || localize('newChat', "New Chat");
 				return {
 					sessionId: session.sessionId,
+					sessionResource: session.sessionResource,
 					title,
 					lastMessageDate: session.lastMessageDate,
 					isActive: true,
-				} satisfies IChatDetail;
+				};
 			});
 
 		const index = await this._chatSessionStore.getIndex();
@@ -314,13 +318,14 @@ export class ChatService extends Disposable implements IChatService {
 			.filter(entry => !this._sessionModels.has(entry.sessionId) && !entry.isImported && !entry.isEmpty)
 			.map((entry): IChatDetail => ({
 				...entry,
+				sessionResource: LocalChatSessionUri.forSession(entry.sessionId),
 				isActive: this._sessionModels.has(entry.sessionId),
 			}));
 		return [...liveSessionItems, ...entries];
 	}
 
-	async removeHistoryEntry(sessionId: string): Promise<void> {
-		await this._chatSessionStore.deleteSession(sessionId);
+	async removeHistoryEntry(sessionResource: URI): Promise<void> {
+		await this._chatSessionStore.deleteSession(this.toLocalSessionId(sessionResource));
 	}
 
 	async clearAllHistoryEntries(): Promise<void> {
@@ -332,7 +337,7 @@ export class ChatService extends Disposable implements IChatService {
 		return this._startSession(undefined, location, isGlobalEditingSession, token, options);
 	}
 
-	private _startSession(someSessionHistory: IExportableChatData | ISerializableChatData | undefined, location: ChatAgentLocation, isGlobalEditingSession: boolean, token: CancellationToken, options?: { canUseTools?: boolean; inputType?: string }): ChatModel {
+	private _startSession(someSessionHistory: IExportableChatData | ISerializableChatData | undefined, location: ChatAgentLocation, isGlobalEditingSession: boolean, token: CancellationToken, options?: { sessionResource?: URI; canUseTools?: boolean; inputType?: string }): ChatModel {
 		const model = this.instantiationService.createInstance(ChatModel, someSessionHistory, { initialLocation: location, canUseTools: options?.canUseTools ?? true, inputType: options?.inputType });
 		if (location === ChatAgentLocation.Chat) {
 			model.startEditingSession(isGlobalEditingSession);
@@ -453,6 +458,15 @@ export class ChatService extends Disposable implements IChatService {
 	async loadSessionForResource(chatSessionResource: URI, location: ChatAgentLocation, token: CancellationToken): Promise<IChatModel | undefined> {
 		// TODO: Move this into a new ChatModelService
 
+		if (chatSessionResource.scheme === Schemas.vscodeLocalChatSession) {
+			const parsed = LocalChatSessionUri.parse(chatSessionResource);
+			if (!parsed) {
+				throw new ErrorNoTelemetry('Invalid local chat session URI');
+			}
+
+			return this.getOrRestoreSession(parsed.sessionId);
+		}
+
 		const existing = this._contentProviderSessionModels.get(chatSessionResource);
 		if (existing) {
 			return existing.model;
@@ -462,7 +476,7 @@ export class ChatService extends Disposable implements IChatService {
 		const chatSessionType = chatSessionResource.scheme;
 
 		// Contributed sessions do not use UI tools
-		const model = this._startSession(undefined, location, true, CancellationToken.None, { canUseTools: false, inputType: chatSessionType });
+		const model = this._startSession(undefined, location, true, CancellationToken.None, { sessionResource: chatSessionResource, canUseTools: false, inputType: chatSessionType });
 		model.setContributedChatSession({
 			chatSessionType: chatSessionType,
 			chatSessionId: chatSessionResource.toString(),
@@ -1159,5 +1173,17 @@ export class ChatService extends Disposable implements IChatService {
 
 	logChatIndex(): void {
 		this._chatSessionStore.logIndex();
+	}
+
+	private toLocalSessionId(sessionResource: URI) {
+		const parsed = LocalChatSessionUri.parse(sessionResource);
+		if (!parsed) {
+			throw new Error(`Invalid local chat session resource: ${sessionResource.toString()}`);
+		}
+		if (parsed.chatSessionType !== 'local') {
+			throw new Error(`Can only delete local chat sessions, got: ${parsed.chatSessionType}`);
+		}
+
+		return parsed.sessionId;
 	}
 }
