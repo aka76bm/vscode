@@ -299,7 +299,7 @@ export class TerminalTabbedView extends Disposable {
 	private _addTabTree() {
 		this._splitView.addView({
 			element: this._tabContainer,
-			layout: width => this._tabList.layout(width),
+			layout: width => this._tabList.layout(this._height || 0, width),
 			minimumSize: TerminalTabsListSizes.NarrowViewWidth,
 			maximumSize: TerminalTabsListSizes.MaximumWidth,
 			onDidChange: () => Disposable.None,
@@ -342,7 +342,8 @@ export class TerminalTabbedView extends Disposable {
 	}
 
 	layout(width: number, height: number): void {
-		this._height = height;
+		const chatItemHeight = this._chatEntry?.element.style.display === 'none' ? 0 : this._chatEntry?.element.clientHeight;
+		this._height = height - (chatItemHeight ?? 0);
 		this._width = width;
 		this._splitView.layout(width);
 		if (this._shouldShowTabs()) {

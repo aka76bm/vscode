@@ -219,7 +219,7 @@ class ArtifactRenderer implements ICompressibleTreeRenderer<SCMArtifactTreeEleme
 			const artifact = artifactOrFolder.artifact;
 			const provider = artifactOrFolder.repository.provider;
 			const repositoryMenus = this._scmViewService.menus.getRepositoryMenus(provider);
-			templateData.elementDisposables.add(connectPrimaryMenu(repositoryMenus.getArtifactMenu(artifactOrFolder.group), primary => {
+			templateData.elementDisposables.add(connectPrimaryMenu(repositoryMenus.getArtifactMenu(artifactOrFolder.group, artifact), primary => {
 				templateData.actionBar.setActions(primary);
 			}, 'inline', provider));
 			templateData.actionBar.context = artifact;
@@ -415,6 +415,12 @@ export class SCMRepositoriesViewPane extends ViewPane {
 				this.visibilityDisposables.add(runOnChange(this.scmViewService.explorerEnabledConfig, async () => {
 					await this.updateChildren();
 					this.updateBodySize(this.tree.contentHeight);
+
+					// If we only have one repository, expand it
+					if (this.scmViewService.repositories.length === 1) {
+						await this.treeOperationSequencer.queue(() =>
+							this.tree.expand(this.scmViewService.repositories[0]));
+					}
 				}));
 
 				// Update tree selection
@@ -522,6 +528,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 	private async onDidAddRepository(repository: ISCMRepository): Promise<void> {
 		const disposables = new DisposableStore();
 
+		// Artifact group changed
 		disposables.add(autorun(async reader => {
 			const artifactsProvider = repository.provider.artifactProvider.read(reader);
 			if (!artifactsProvider) {
@@ -529,6 +536,19 @@ export class SCMRepositoriesViewPane extends ViewPane {
 			}
 
 			reader.store.add(artifactsProvider.onDidChangeArtifacts(async groups => {
+				await this.updateRepository(repository);
+			}));
+		}));
+
+		// HistoryItemRef changed
+		disposables.add(autorun(async reader => {
+			const historyProvider = repository.provider.historyProvider.read(reader);
+			if (!historyProvider) {
+				return;
+			}
+
+			reader.store.add(autorun(async reader => {
+				historyProvider.historyItemRef.read(reader);
 				await this.updateRepository(repository);
 			}));
 		}));
@@ -574,7 +594,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 			const artifact = e.element.artifact;
 
 			const menus = this.scmViewService.menus.getRepositoryMenus(provider);
-			const menu = menus.getArtifactMenu(e.element.group);
+			const menu = menus.getArtifactMenu(e.element.group, artifact);
 			const actions = collectContextMenuActions(menu, provider);
 
 			this.contextMenuService.showContextMenu({
@@ -677,6 +697,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 			this.minimumBodySize = visibleCount === 0 ? 22 : size;
 			this.maximumBodySize = visibleCount === 0 ? Number.POSITIVE_INFINITY : empty ? Number.POSITIVE_INFINITY : size;
 		} else {
+			this.minimumBodySize = 120;
 			this.maximumBodySize = Number.POSITIVE_INFINITY;
 		}
 	}

@@ -95,6 +95,7 @@ import { ChatViewPane } from './chatViewPane.js';
 import { ChatViewWelcomePart, IChatSuggestedPrompts, IChatViewWelcomeContent } from './viewsWelcome/chatViewWelcomeController.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
+import { katexContainerClassName } from '../../markdown/common/markedKatexExtension.js';
 
 const $ = dom.$;
 
@@ -457,7 +458,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			}
 
 			this.parsedChatRequest = this.instantiationService.createInstance(ChatRequestParser)
-				.parseChatRequest(this.viewModel!.sessionResource, this.getInput(), this.location, {
+				.parseChatRequest(this.viewModel.sessionResource, this.getInput(), this.location, {
 					selectedAgent: this._lastSelectedAgent,
 					mode: this.input.currentModeKind,
 					forcedAgent: this._lockedAgent?.id ? this.chatAgentService.getAgent(this._lockedAgent.id) : undefined
@@ -1948,7 +1949,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 
 			this.inputPart?.toggleChatInputOverlay(false);
 			try {
-				if (editedRequest?.rowContainer && editedRequest.rowContainer.contains(this.inputContainer)) {
+				if (editedRequest?.rowContainer?.contains(this.inputContainer)) {
 					editedRequest.rowContainer.removeChild(this.inputContainer);
 				} else if (this.inputContainer.parentElement) {
 					this.inputContainer.parentElement.removeChild(this.inputContainer);
@@ -1970,7 +1971,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		this.inputPart?.setEditing(!!this.viewModel?.editing && isInput);
 
 		this.onDidChangeItems();
-		if (editedRequest && editedRequest.currentElement) {
+		if (editedRequest?.currentElement) {
 			this.renderer.updateItemHeightOnRender(editedRequest.currentElement, editedRequest);
 		}
 
@@ -2015,7 +2016,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 
 		// Check if the context menu was opened on a KaTeX element
 		const target = e.browserEvent.target as HTMLElement;
-		const isKatexElement = target.closest('.katex') !== null;
+		const isKatexElement = target.closest(`.${katexContainerClassName}`) !== null;
 
 		const scopedContextKeyService = this.contextKeyService.createOverlay([
 			[ChatContextKeys.responseIsFiltered.key, isResponseVM(selected) && !!selected.errorDetails?.responseIsFiltered],
@@ -2306,6 +2307,12 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			}
 			// Show next steps widget when response completes (not when request starts)
 			if (e.kind === 'completedRequest') {
+				const lastRequest = this.viewModel?.model.getRequests().at(-1);
+				const wasCancelled = lastRequest?.response?.isCanceled ?? false;
+				if (wasCancelled) {
+					// Clear todo list when request is cancelled
+					this.inputPart.clearTodoListWidget(this.viewModel?.sessionResource, true);
+				}
 				// Only show if response wasn't canceled
 				this.renderChatSuggestNextWidget();
 			}
