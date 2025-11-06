@@ -406,7 +406,7 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	private _startSession(someSessionHistory: IExportableChatData | ISerializableChatData | undefined, location: ChatAgentLocation, isGlobalEditingSession: boolean, token: CancellationToken, options?: { sessionResource?: URI; canUseTools?: boolean }, transferEditingSession?: IChatEditingSession): ChatModel {
-		const model = this.instantiationService.createInstance(ChatModel, someSessionHistory, { initialLocation: location, canUseTools: options?.canUseTools ?? true });
+		const model = this.instantiationService.createInstance(ChatModel, someSessionHistory, { initialLocation: location, canUseTools: options?.canUseTools ?? true, resource: options?.sessionResource });
 		if (location === ChatAgentLocation.Chat) {
 			model.startEditingSession(isGlobalEditingSession, transferEditingSession);
 		}
@@ -507,7 +507,7 @@ export class ChatService extends Disposable implements IChatService {
 	getPersistedSessionTitle(sessionResource: URI): string | undefined {
 		const sessionId = LocalChatSessionUri.parseLocalSessionId(sessionResource);
 		if (!sessionId) {
-			throw new Error(`Cannot restore non-local session ${sessionResource}`);
+			return undefined;
 		}
 
 		// First check the memory cache (_persistedSessions)
@@ -870,21 +870,7 @@ export class ChatService extends Disposable implements IChatService {
 							message = promptTextResult.message;
 						}
 
-						let isInitialTools = true;
-
-						store.add(autorun(reader => {
-							const tools = options?.userSelectedTools?.read(reader);
-							if (isInitialTools) {
-								isInitialTools = false;
-								return;
-							}
-
-							if (tools) {
-								this.chatAgentService.setRequestTools(agent.id, request.id, tools);
-							}
-						}));
-
-						return {
+						const agentRequest: IChatAgentRequest = {
 							sessionId: model.sessionId,
 							requestId: request.id,
 							agentId: agent.id,
@@ -903,7 +889,25 @@ export class ChatService extends Disposable implements IChatService {
 							modeInstructions: options?.modeInfo?.modeInstructions,
 							editedFileEvents: request.editedFileEvents,
 							chatSummary: options?.chatSummary
-						} satisfies IChatAgentRequest;
+						};
+
+						let isInitialTools = true;
+
+						store.add(autorun(reader => {
+							const tools = options?.userSelectedTools?.read(reader);
+							if (isInitialTools) {
+								isInitialTools = false;
+								return;
+							}
+
+							if (tools) {
+								this.chatAgentService.setRequestTools(agent.id, request.id, tools);
+								// in case the request has not been sent out yet:
+								agentRequest.userSelectedTools = tools;
+							}
+						}));
+
+						return agentRequest;
 					};
 
 					if (
