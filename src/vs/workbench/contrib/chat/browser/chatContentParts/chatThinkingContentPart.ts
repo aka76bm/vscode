@@ -31,7 +31,6 @@ function extractTitleFromThinkingContent(content: string): string | undefined {
 	return headerMatch ? headerMatch[1] : undefined;
 }
 
-
 export class ChatThinkingContentPart extends ChatCollapsibleContentPart implements IChatContentPart {
 	public readonly codeblocks: undefined;
 	public readonly codeblocksPartId: undefined;
@@ -65,7 +64,6 @@ export class ChatThinkingContentPart extends ChatCollapsibleContentPart implemen
 		super(extractedTitle, context);
 
 		this.id = content.id;
-
 		const configuredMode = this.configurationService.getValue<ThinkingDisplayMode>('chat.agent.thinkingStyle') ?? ThinkingDisplayMode.Collapsed;
 
 		this.fixedScrollingMode = configuredMode === ThinkingDisplayMode.FixedScrolling;
@@ -165,13 +163,19 @@ export class ChatThinkingContentPart extends ChatCollapsibleContentPart implemen
 			return;
 		}
 
+		// If the entire content is bolded, strip the bold markers for rendering
+		let contentToRender = cleanedContent;
+		if (cleanedContent.startsWith('**') && cleanedContent.endsWith('**')) {
+			contentToRender = cleanedContent.slice(2, -2);
+		}
+
 		const target = reuseExisting ? this.markdownResult?.element : undefined;
 		if (this.markdownResult) {
 			this.markdownResult.dispose();
 			this.markdownResult = undefined;
 		}
 
-		const rendered = this._register(this.markdownRendererService.render(new MarkdownString(cleanedContent), undefined, target));
+		const rendered = this._register(this.markdownRendererService.render(new MarkdownString(contentToRender), undefined, target));
 		this.markdownResult = rendered;
 		if (!target) {
 			clearNode(this.textContainer);
